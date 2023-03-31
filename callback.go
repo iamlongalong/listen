@@ -2,6 +2,28 @@ package listen
 
 import "context"
 
+type FuncOnGet = func(ctx context.Context, key string) (v interface{}, err error, ok bool)
+type FuncOnSet = func(ctx context.Context, key string, v interface{}) (ver int, err error, ok bool)
+type FuncOnDel = func(ctx context.Context, key string) (ver int, err error, ok bool)
+type FuncOnRange = func(ctx context.Context, f func(ctx context.Context, key string, v interface{}) bool) (nf func(ctx context.Context, key string, v interface{}) bool, ok bool)
+
+type FuncAfterGet = func(ctx context.Context, key string, v interface{}, err error)
+type FuncAfterSet = func(ctx context.Context, key string, v interface{}, ver int, err error)
+type FuncAfterDel = func(ctx context.Context, key string, ver int, err error)
+type FuncAfterRange = func(ctx context.Context, rangedKeys map[string]struct{})
+
+type OnOption struct {
+	OnGet   FuncOnGet
+	OnSet   FuncOnSet
+	OnDel   FuncOnDel
+	OnRange FuncOnRange
+
+	AfterGet   FuncAfterGet
+	AfterSet   FuncAfterSet
+	AfterDel   FuncAfterDel
+	AfterRange FuncAfterRange
+}
+
 type MapCbFunc struct {
 	onGet   []FuncOnGet
 	onSet   []FuncOnSet

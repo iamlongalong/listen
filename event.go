@@ -5,6 +5,85 @@ import (
 	"sync"
 )
 
+type EventOp int
+
+const (
+	EventMapSet EventOp = iota + 1
+	EventMapDel
+)
+
+type Event struct {
+	Option  EventOp
+	Version int
+
+	Payload Encoder // TODO
+}
+
+type IEventManager interface {
+	IEventStorage
+	IEvnetGetter
+}
+
+type IEventStorage interface {
+	AppendEvent(ctx context.Context, e Event) (ver int, err error)
+}
+
+type IEvnetGetter interface {
+	GetEvents(ctx context.Context, opt getLogOption) (es []Event, err error)
+	Version(ctx context.Context) (ver int, err error)
+}
+
+// MapEventHub implement EventListener for listener management
+type MapEventHub struct {
+	evGetter IEvnetGetter
+
+	mu sync.Mutex
+
+	listeners map[EventListener]struct{}
+}
+
+func (meh *MapEventHub) Emit(ctx context.Context, e Event) {
+	meh.mu.Unlock()
+	defer meh.mu.Unlock()
+
+	for l := range meh.listeners {
+		// TODO 最好处理顺序问题
+		l.Emit(ctx, e)
+	}
+}
+
+func (meh *MapEventHub) ListenAndSync(el EventListener, after int) {
+	defer meh.Listen(el)
+
+	ctx := context.Background()
+
+	es, err := meh.evGetter.GetEvents(ctx, LogOptionGreaterThan(after, true))
+	if err != nil {
+		// TODO handle err
+		return
+	}
+
+	for _, e := range es {
+		el.Emit(ctx, e)
+	}
+}
+
+func (meh *MapEventHub) Listen(el EventListener) {
+	meh.mu.Lock()
+	defer meh.mu.Unlock()
+
+	meh.listeners[el] = struct{}{}
+}
+
+func (meh *MapEventHub) UnListen(el EventListener) {
+	meh.mu.Lock()
+	defer meh.mu.Unlock()
+
+	delete(meh.listeners, el)
+}
+
+// <<<<<<<<<<<<<<<<<<< getLogOption >>>>>>>>>>>>>>>>>
+
 type getLogOption struct {
 	operation string // == > >= < <=  ~ (latest n)  <=x<  <x<=  <x<  <=x<=
 	val1      int
@@ -94,6 +173,8 @@ func (opt *getLogOption) LessThan() (ok bool, ltval int, withEqual bool) {
 
 	return false, 0, false
 }
+
+// <<<<<<<<<<<<<<<< MapEventManager >>>>>>>>>>>>>>>>>
 
 // MapEventManager in mem log
 type MapEventManager struct {
